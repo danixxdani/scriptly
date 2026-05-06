@@ -11,7 +11,7 @@
   --bg:#1c1c1e;--sb:#111113;--paper:#f7f3eb;--ink:#111;
   --acc:#4a90d9;--bdr:#2a2a2c;
   --ce:#a02020;--cs:#1a5fa0;--ca:#3a7a3a;--cd:#5a4aaa;
-  --fs:'Courier Prime',monospace;--fz:13px;
+  --fs:'Courier Prime',monospace;--fz:12px;
 }
 body{font-family:'IBM Plex Sans KR',sans-serif;background:var(--bg);color:#ccc;height:100vh;display:flex;flex-direction:column;overflow:hidden}
 
@@ -218,8 +218,8 @@ body{font-family:'IBM Plex Sans KR',sans-serif;background:var(--bg);color:#ccc;h
     <div class="spsec">
       <div class="splbl">Font Size</div>
       <div class="slrow">
-        <input type="range" min="11" max="18" value="13" id="fsSlider" oninput="setFontSize(this.value)">
-        <span class="slval" id="fsVal">13px</span>
+        <input type="range" min="11" max="18" value="12" id="fsSlider" oninput="setFontSize(this.value)">
+        <span class="slval" id="fsVal">12px</span>
       </div>
     </div>
     <div class="spsec">
@@ -450,9 +450,43 @@ function syncWC(){
 
 const AUTOSAVE_KEY = 'scriptly-autosave';
 const AUTOSAVE_VERSIONS_KEY = 'scriptly-autosave-versions';
+const SETTINGS_KEY = 'scriptly-settings';
 const AUTOSAVE_MAX_VERSIONS = 5;
 let autosaveDirty = false;
 let lastSavedHash = '';
+
+function getSettingsData(){
+  const fontBtn=document.querySelector('#fontOpts .spopt.on');
+  const paperBtn=document.querySelector('#paperOpts .spopt.on');
+  return {
+    font: fontBtn?.dataset.font || getComputedStyle(document.documentElement).getPropertyValue('--fs').trim(),
+    fontSize: document.getElementById('fsSlider').value,
+    paper: paperBtn?.dataset.color || document.getElementById('page').style.background || ''
+  };
+}
+
+function saveSettings(){
+  try{localStorage.setItem(SETTINGS_KEY,JSON.stringify(getSettingsData()));}catch(e){console.warn('Settings save failed',e);}
+}
+
+function loadSettings(){
+  const raw=localStorage.getItem(SETTINGS_KEY);
+  if(!raw) return;
+  let data;
+  try{data=JSON.parse(raw);}catch(e){return;}
+  if(data.font){
+    const btn=[...document.querySelectorAll('#fontOpts .spopt')].find(b=>b.dataset.font===data.font);
+    if(btn) setFont(btn);
+  }
+  if(data.fontSize){
+    document.getElementById('fsSlider').value=data.fontSize;
+    setFontSize(data.fontSize);
+  }
+  if(data.paper){
+    const btn=[...document.querySelectorAll('#paperOpts .spopt')].find(b=>b.dataset.color===data.paper);
+    if(btn) setPaper(btn);
+  }
+}
 
 function getDraftData(){
   return {
@@ -879,11 +913,13 @@ function setFont(btn){
   const f=btn.dataset.font;
   document.documentElement.style.setProperty('--fs',f);
   ED().style.fontFamily=f;
+  saveSettings();
 }
 function setFontSize(v){
   document.documentElement.style.setProperty('--fz',v+'px');
   ED().style.fontSize=v+'px';
   document.getElementById('fsVal').textContent=v+'px';
+  saveSettings();
 }
 function isDarkColor(hex){
   // Parse hex and calculate luminance
@@ -926,6 +962,7 @@ function setPaper(btn){
       .ptitle::placeholder{color:#888}
     `;
   }
+  saveSettings();
 }
 
 // ── IMPORT / EXPORT ───────────────────────────────────────
@@ -1005,6 +1042,7 @@ function caretEnd(el){
 }
 
 // ── INIT ──────────────────────────────────────────────────
+loadSettings();
 if(!loadDraft()){
   loadBlocks([
     {type:'episode',  text:'Episode 1:'},
