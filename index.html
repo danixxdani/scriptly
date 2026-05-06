@@ -57,20 +57,23 @@ body{font-family:'IBM Plex Sans KR',sans-serif;background:var(--bg);color:#ccc;h
 
 /* FORMAT BAR — sits inside paper, pinned to top center */
 .fmtbar{
-  position:absolute;
-  top:14px;
-  left:50%;
-  transform:translateX(-50%);
-  display:flex;gap:4px;
-  padding:5px 8px;
-  background:rgba(17,19,21,0.88);
-  backdrop-filter:blur(6px);
-  border:1px solid var(--bdr);
-  border-radius:8px;
-  box-shadow:0 4px 20px rgba(0,0,0,.55);
-  z-index:150;
-  flex-shrink:0;
-  white-space:nowrap;
+  position: sticky;
+  top: 0;
+  left: 0;
+  transform: none;
+  display: flex;
+  justify-content: center;
+  gap: 4px;
+  padding: 5px 8px;
+  background: rgba(17,19,21,0.88);
+  backdrop-filter: blur(6px);
+  border: 1px solid var(--bdr);
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0,0,0,.55);
+  z-index: 150;
+  flex-shrink: 0;
+  white-space: nowrap;
+  margin-bottom: 20px;
 }
 .fmtb{font-size:9px;font-weight:700;padding:4px 10px;border-radius:5px;text-transform:uppercase;letter-spacing:.5px;cursor:pointer;border:1px solid transparent;font-family:'IBM Plex Sans KR',sans-serif;transition:all .12s;background:transparent;display:flex;align-items:center;gap:5px}
 .fmtb .kh{font-size:8px;opacity:.4;font-weight:400}
@@ -134,7 +137,7 @@ body{font-family:'IBM Plex Sans KR',sans-serif;background:var(--bg);color:#ccc;h
 .spclose:hover{background:#2a2a2c;color:#eee}
 
 /* Drag handle overlay */
-#dragHandle{position:fixed;opacity:0;z-index:200;cursor:grab;color:#888;font-size:15px;user-select:none;padding:2px 5px;transition:opacity .1s;pointer-events:auto;background:rgba(30,30,32,0.7);border-radius:4px;line-height:1}
+#dragHandle{position:fixed;opacity:0.5;z-index:200;cursor:grab;color:#888;font-size:15px;user-select:none;padding:2px 5px;transition:opacity .1s;pointer-events:auto;background:rgba(30,30,32,0.7);border-radius:4px;line-height:1}
 #dragHandle:active{cursor:grabbing}
 
 ::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:#2a2a2c;border-radius:3px}
@@ -182,13 +185,13 @@ body{font-family:'IBM Plex Sans KR',sans-serif;background:var(--bg);color:#ccc;h
 
   <div class="edwrap">
 
+    <div class="fmtbar">
+      <button class="fmtb fb-e" id="ftb-episode"  onclick="setType('episode')"><span class="fbg fg-e">Episode</span><span class="kh">⌘1</span></button>
+      <button class="fmtb fb-s" id="ftb-scene"    onclick="setType('scene')"><span class="fbg fg-s">Scene</span><span class="kh">⌘2</span></button>
+      <button class="fmtb fb-a" id="ftb-action"   onclick="setType('action')"><span class="fbg fg-a">Action</span><span class="kh">⌘3</span></button>
+      <button class="fmtb fb-d" id="ftb-dialogue" onclick="setType('dialogue')"><span class="fbg fg-d">Dialogue</span><span class="kh">⌘4</span></button>
+    </div>
     <div class="page" id="page">
-      <div class="fmtbar">
-        <button class="fmtb fb-e" id="ftb-episode"  onclick="setType('episode')"><span class="fbg fg-e">Episode</span><span class="kh">⌘1</span></button>
-        <button class="fmtb fb-s" id="ftb-scene"    onclick="setType('scene')"><span class="fbg fg-s">Scene</span><span class="kh">⌘2</span></button>
-        <button class="fmtb fb-a" id="ftb-action"   onclick="setType('action')"><span class="fbg fg-a">Action</span><span class="kh">⌘3</span></button>
-        <button class="fmtb fb-d" id="ftb-dialogue" onclick="setType('dialogue')"><span class="fbg fg-d">Dialogue</span><span class="kh">⌘4</span></button>
-      </div>
       <input class="ptitle" id="ptitle" placeholder="UNTITLED SCRIPT" spellcheck="false">
       <div id="editor" contenteditable="true" spellcheck="true"></div>
     </div>
@@ -690,46 +693,70 @@ handleEl.addEventListener('mouseenter',()=>{handleEl.style.opacity='1';});
 handleEl.addEventListener('mouseleave',()=>{if(!ED().matches(':hover')){handleEl.style.opacity='0';hoveredP=null;}});
 
 // Drag from handle
-handleEl.draggable=true;
-handleEl.addEventListener('dragstart',e=>{
-  if(!hoveredP){e.preventDefault();return;}
-  dragSrcP=hoveredP;
-  e.dataTransfer.effectAllowed='move';
-  e.dataTransfer.setData('text/plain','block');
-  setTimeout(()=>{if(dragSrcP)dragSrcP.classList.add('dragging');},0);
-  handleEl.style.opacity='0';
+handleEl.draggable = false;
+handleEl.addEventListener('mousedown', e => {
+  console.log('Handle mousedown');
+  e.preventDefault();
+  // Ensure hoveredP is set
+  if(!hoveredP) {
+    const el = document.elementFromPoint(e.clientX, e.clientY);
+    let targetP = el.closest('#editor > p');
+    if(!targetP) {
+      // Try slightly to the right (where the paragraph should be)
+      targetP = document.elementFromPoint(e.clientX + 40, e.clientY).closest('#editor > p');
+    }
+    if(targetP) hoveredP = targetP;
+  }
+  console.log('hoveredP after check:', hoveredP);
+  if(!hoveredP) {
+    console.log('Still no hoveredP, aborting');
+    return;
+  }
+  console.log('Starting drag for:', hoveredP.textContent.slice(0,20));
+  dragSrcP = hoveredP;
+  dragSrcP.classList.add('dragging');
+  handleEl.style.opacity = '0';
+  let dropTarget = null;
+  let isTop = false;
+  const moveHandler = e => {
+    const el = document.elementFromPoint(e.clientX, e.clientY);
+    const p = el ? el.closest('#editor > p') : null;
+    if(p && p !== dragSrcP){
+      allPs().forEach(x => x.classList.remove('drag-over-top','drag-over-bot'));
+      const r = p.getBoundingClientRect();
+      isTop = e.clientY < r.top + r.height / 2;
+      p.classList.add(isTop ? 'drag-over-top' : 'drag-over-bot');
+      dropTarget = p;
+    } else {
+      allPs().forEach(x => x.classList.remove('drag-over-top','drag-over-bot'));
+      dropTarget = null;
+    }
+  };
+  const upHandler = e => {
+    console.log('Mouseup, dropTarget:', dropTarget, 'isTop:', isTop);
+    if(dropTarget){
+      if(isTop){
+        dropTarget.before(dragSrcP);
+      } else {
+        dropTarget.after(dragSrcP);
+      }
+      syncAll();
+      console.log('Dropped successfully');
+    } else {
+      console.log('No drop target');
+    }
+    cleanDrag();
+    document.removeEventListener('mousemove', moveHandler);
+    document.removeEventListener('mouseup', upHandler);
+  };
+  document.addEventListener('mousemove', moveHandler);
+  document.addEventListener('mouseup', upHandler);
 });
 handleEl.addEventListener('dragend',()=>cleanDrag());
 
 // Editor receives drag events when dragSrcP is set
-ED().addEventListener('dragover',e=>{
-  if(!dragSrcP)return; // let text drag work normally
-  e.preventDefault();e.stopPropagation();
-  e.dataTransfer.dropEffect='move';
-  const p=e.target.closest&&e.target.closest('#editor > p');
-  if(p&&p!==dragSrcP){
-    allPs().forEach(x=>x.classList.remove('drag-over-top','drag-over-bot'));
-    const r=p.getBoundingClientRect();
-    p.classList.add(e.clientY<r.top+r.height/2?'drag-over-top':'drag-over-bot');
-  }
-},false);
-ED().addEventListener('dragleave',e=>{
-  if(!dragSrcP)return;
-  if(!ED().contains(e.relatedTarget))allPs().forEach(x=>x.classList.remove('drag-over-top','drag-over-bot'));
-});
-ED().addEventListener('drop',e=>{
-  if(!dragSrcP)return;
-  e.preventDefault();e.stopPropagation();
-  const p=e.target.closest&&e.target.closest('#editor > p');
-  if(p&&p!==dragSrcP){
-    const r=p.getBoundingClientRect();
-    if(e.clientY<r.top+r.height/2)p.before(dragSrcP);else p.after(dragSrcP);
-  }
-  cleanDrag();syncAll();
-},false);
-
-// Also accept drop on edwrap in case mouse drifts outside editor
-document.querySelector('.edwrap').addEventListener('dragover',e=>{if(dragSrcP)e.preventDefault();});
+const edwrap = document.querySelector('.edwrap');
+// Removed drag events, using mouse events instead
 
 function cleanDrag(){
   if(dragSrcP){dragSrcP.classList.remove('dragging');dragSrcP=null;}
