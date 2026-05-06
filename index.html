@@ -75,15 +75,10 @@ body{font-family:'IBM Plex Sans KR',sans-serif;background:var(--bg);color:#ccc;h
   white-space: nowrap;
   margin-bottom: 20px;
 }
-.fmtb{font-size:9px;font-weight:700;padding:4px 10px;border-radius:5px;text-transform:uppercase;letter-spacing:.5px;cursor:pointer;border:1px solid transparent;font-family:'IBM Plex Sans KR',sans-serif;transition:all .12s;background:transparent;display:flex;align-items:center;gap:5px}
-.fmtb .kh{font-size:8px;opacity:.4;font-weight:400}
-.fb-e{color:var(--ce)}.fb-s{color:var(--cs)}.fb-a{color:var(--ca)}.fb-d{color:var(--cd)}
+.fmtb{font-size:9px;font-weight:700;padding:4px 10px;border-radius:5px;text-transform:uppercase;letter-spacing:.5px;cursor:pointer;border:1px solid transparent;font-family:'IBM Plex Sans KR',sans-serif;transition:all .12s;background:transparent;display:flex;align-items:center;gap:5px;color:#fff}
+.fmtb .kh{font-size:8px;opacity:.6;font-weight:400}
 .fmtb:hover{background:rgba(255,255,255,.05)}
 .fmtb.on{border-color:currentColor}
-.fb-e.on{background:rgba(160,32,32,.12)!important}
-.fb-s.on{background:rgba(26,95,160,.12)!important}
-.fb-a.on{background:rgba(58,122,58,.12)!important}
-.fb-d.on{background:rgba(90,74,170,.12)!important}
 
 /* PAPER */
 .page{width:660px;background:var(--paper);box-shadow:0 4px 40px rgba(0,0,0,.5);padding:56px 80px 80px;border-radius:2px;position:relative;padding-top:72px}
@@ -137,7 +132,8 @@ body{font-family:'IBM Plex Sans KR',sans-serif;background:var(--bg);color:#ccc;h
 .spclose:hover{background:#2a2a2c;color:#eee}
 
 /* Drag handle overlay */
-#dragHandle{position:fixed;opacity:0.5;z-index:200;cursor:grab;color:#888;font-size:15px;user-select:none;padding:2px 5px;transition:opacity .1s;pointer-events:auto;background:rgba(30,30,32,0.7);border-radius:4px;line-height:1}
+#dragHandle{position:fixed;opacity:0;z-index:200;cursor:grab;color:#888;font-size:10px;user-select:none;padding:4px 2px;transition:opacity .1s;pointer-events:auto;background:rgba(30,30,32,0.7);border-radius:4px;line-height:1}
+#dragHandle::before{content:'⋮'}
 #dragHandle:active{cursor:grabbing}
 
 ::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:#2a2a2c;border-radius:3px}
@@ -232,7 +228,7 @@ body{font-family:'IBM Plex Sans KR',sans-serif;background:var(--bg);color:#ccc;h
 </div>
 
 <div class="ddmenu" id="ddMenu"></div>
-<div id="dragHandle">⠿</div>
+<div id="dragHandle"></div>
 <input type="file" id="fileInput" accept=".rtf,.txt" style="display:none" onchange="handleImport(event)">
 
 <script>
@@ -714,11 +710,26 @@ handleEl.addEventListener('mousedown', e => {
   }
   console.log('Starting drag for:', hoveredP.textContent.slice(0,20));
   dragSrcP = hoveredP;
-  dragSrcP.classList.add('dragging');
+  // Create a clone that follows the mouse
+  const rect = dragSrcP.getBoundingClientRect();
+  const offsetX = e.clientX - rect.left;
+  const offsetY = e.clientY - rect.top;
+  const clone = dragSrcP.cloneNode(true);
+  clone.style.position = 'fixed';
+  clone.style.left = rect.left + 'px';
+  clone.style.top = rect.top + 'px';
+  clone.style.width = rect.width + 'px';
+  clone.style.zIndex = '1000';
+  clone.style.opacity = '0.8';
+  clone.style.pointerEvents = 'none';
+  document.body.appendChild(clone);
+  dragSrcP.style.opacity = '0'; // Hide original
   handleEl.style.opacity = '0';
   let dropTarget = null;
   let isTop = false;
   const moveHandler = e => {
+    clone.style.left = (e.clientX - offsetX) + 'px';
+    clone.style.top = (e.clientY - offsetY) + 'px';
     const el = document.elementFromPoint(e.clientX, e.clientY);
     const p = el ? el.closest('#editor > p') : null;
     if(p && p !== dragSrcP){
@@ -734,6 +745,8 @@ handleEl.addEventListener('mousedown', e => {
   };
   const upHandler = e => {
     console.log('Mouseup, dropTarget:', dropTarget, 'isTop:', isTop);
+    clone.remove();
+    dragSrcP.style.opacity = '';
     if(dropTarget){
       if(isTop){
         dropTarget.before(dragSrcP);
