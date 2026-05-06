@@ -518,14 +518,13 @@ function setType(type){
   syncAll();syncTB();caretEnd(p);
 }
 
-// ── ENTITIES ───────────────────────────────────────────────
 function rebuildEntities(){
   characters.clear();locations.clear();
   allPs().forEach(p=>{
     const type=gType(p),text=p.textContent;
     if(type==='scene'){
       const pfx=PREFIXES.find(x=>text.toUpperCase().startsWith(x));
-      if(pfx){let r=text.slice(pfx.length).trim();if(r.includes(' - '))r=r.split(' - ')[0].trim();if(r.length>1)locations.add(r.toUpperCase());}
+      if(pfx){let r=text.slice(pfx.length).trim();if(r.includes(' - ')){const parts=r.split(' - ');if(parts[1].trim())locations.add(parts[0].trim().toUpperCase());}}
     }
     if(type==='dialogue'){
       const base=getCharName(text);
