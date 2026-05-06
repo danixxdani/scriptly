@@ -112,6 +112,12 @@ body{font-family:'IBM Plex Sans KR',sans-serif;background:var(--bg);color:#ccc;h
 .dditem{padding:8px 12px;cursor:pointer;font-size:13px;color:#ccc;font-family:'Courier Prime',monospace;transition:background .07s}
 .dditem:hover,.dditem.sel{background:var(--acc);color:#fff}
 
+.vermenu{position:fixed;z-index:1001;min-width:220px;background:#111113;border:1px solid #333;border-radius:8px;box-shadow:0 10px 26px rgba(0,0,0,.8);overflow:hidden;display:none}
+.vermenu.show{display:block}
+.veritem{padding:10px 14px;font-size:12px;color:#ddd;cursor:pointer;transition:background .12s;border-bottom:1px solid rgba(255,255,255,.04);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.veritem:hover{background:rgba(255,255,255,.06)}
+.veritem.empty{color:#777;cursor:default}
+
 /* SETTINGS */
 .sov{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:500;display:none;align-items:center;justify-content:center}
 .sov.show{display:flex}
@@ -149,9 +155,12 @@ body{font-family:'IBM Plex Sans KR',sans-serif;background:var(--bg);color:#ccc;h
   <button class="tbtn" onclick="openSettings()">⚙ Settings</button>
   <div class="tmid">
     <span class="wc" id="wc">0 words</span>
-    <button class="tbtn pri" onclick="doExport()">Save</button>
+    <span class="wc" id="saveStatus">Ready</span>
+    <button id="versionsBtn" class="tbtn" onclick="showVersions(event)">Versions</button>
+    <button class="tbtn pri" onclick="saveVersion()">Save</button>
   </div>
 </div>
+<div class="vermenu" id="verMenu"></div>
 
 <div class="main">
   <div class="sb">
@@ -306,82 +315,9 @@ function getCharName(text){
   return null;
 }
 
-function applyContd(){
-  const ps=allPs();
-  let lastChar=null;
-  ps.forEach(p=>{
-    const type=gType(p);
-    if(type==='scene'||type==='episode'){lastChar=null;return;}
-    if(type!=='dialogue')return;
+// CONT'D auto-add removed.
 
-    const text=p.textContent;
-    const base=getCharName(text);
-    if(!base){
-      // Even if no colon yet, check if typing matches lastChar for live preview
-      // We'll handle this below; for now just reset lastChar if no colon found
-      // but don't clear lastChar — let it persist for the next line check
-      return;
-    }
-
-    // Find the dialogue colon index (first : outside parens)
-    let depth=0,colonIdx=-1;
-    for(let i=0;i<text.length;i++){
-      if(text[i]==='(')depth++;
-      else if(text[i]===')')depth--;
-      else if(text[i]===':'&&depth===0){colonIdx=i;break;}
-    }
-    if(colonIdx===-1){lastChar=base;return;}
-
-    const nameArea=text.slice(0,colonIdx); // "ROSIE" or "ROSIE (VO)" or "ROSIE (CONT'D)"
-    const dialoguePart=text.slice(colonIdx); // ": text..."
-
-    // Clean: remove existing (CONT'D) from nameArea
-    const cleanNameArea=nameArea.replace(/\s*\(CONT'D\)\s*/gi,'').trim();
-
-    let newNameArea;
-    if(base===lastChar){
-      // Find where base name ends in cleanNameArea to insert (CONT'D) right after name
-      const nameEndMatch=cleanNameArea.match(/^([A-Z][A-Z\s]+?)(\s*\(.*)?$/);
-      if(nameEndMatch){
-        const namePart=nameEndMatch[1].trim();
-        const notePart=nameEndMatch[2]?nameEndMatch[2].trim():'';
-        newNameArea=notePart?namePart+" (CONT'D) "+notePart:namePart+" (CONT'D)";
-      }else{
-        newNameArea=cleanNameArea+" (CONT'D)";
-      }
-    }else{
-      newNameArea=cleanNameArea;
-    }
-
-    const newText=newNameArea+dialoguePart;
-    if(p.textContent!==newText){
-      // Preserve caret position
-      const isCurrent=p===curP();
-      const sel=window.getSelection();
-      let caretOffset=0;
-      if(isCurrent&&sel.rangeCount){
-        const r=sel.getRangeAt(0).cloneRange();
-        r.selectNodeContents(p);r.setEnd(sel.getRangeAt(0).startContainer,sel.getRangeAt(0).startOffset);
-        caretOffset=r.toString().length;
-      }
-      p.textContent=newText;
-      if(isCurrent){
-        // Restore caret
-        try{
-          const r=document.createRange();const s=window.getSelection();
-          const node=p.firstChild||p;
-          const offset=Math.min(caretOffset,node.textContent?.length||0);
-          r.setStart(node,offset);r.collapse(true);
-          s.removeAllRanges();s.addRange(r);
-        }catch(e){}
-      }
-    }
-    lastChar=base;
-  });
-}
-
-
-// ── LOAD BLOCKS ────────────────────────────────────────────
+// ── LOAD BLOCKS ──────────────────────────────────────────────
 function loadBlocks(arr){
   const ed=ED();
   ed.innerHTML='';
@@ -467,7 +403,8 @@ ED().addEventListener('keydown',e=>{
   // ⌘1-4
   if((e.metaKey||e.ctrlKey)&&!e.shiftKey){
     const map={'1':'episode','2':'scene','3':'action','4':'dialogue'};
-    if(map[e.key]){e.preventDefault();setType(map[e.key]);}
+    if(map[e.key]){e.preventDefault();setType(map[e.key]);return;}
+    if(e.key==='s'){e.preventDefault();saveVersion();return;}
   }
 });
 
@@ -495,7 +432,6 @@ ED().addEventListener('focus',()=>setTimeout(()=>{syncTB();},0),true);
 
 // ── SYNC ───────────────────────────────────────────────────
 function syncAll(){
-  applyContd();
   rebuildEntities();
   syncSidebar();
   syncWC();
@@ -510,6 +446,132 @@ function syncTB(){
 function syncWC(){
   const w=allPs().map(p=>p.textContent).join(' ').trim().split(/\s+/).filter(Boolean).length;
   document.getElementById('wc').textContent=w+' words';
+}
+
+const AUTOSAVE_KEY = 'scriptly-autosave';
+const AUTOSAVE_VERSIONS_KEY = 'scriptly-autosave-versions';
+const AUTOSAVE_MAX_VERSIONS = 5;
+let autosaveDirty = false;
+let lastSavedHash = '';
+
+function getDraftData(){
+  return {
+    title:document.getElementById('ptitle').value,
+    blocks:allPs().map(p=>({type:gType(p),text:p.textContent})),
+    savedAt:Date.now()
+  };
+}
+
+function getDraftHash(draft){
+  return JSON.stringify([draft.title,draft.blocks.map(b=>[b.type,b.text])]);
+}
+
+function showSaveStatus(text){
+  const el=document.getElementById('saveStatus');
+  if(el)el.textContent=text;
+}
+
+function addVersion(draft){
+  let list=[];
+  try{list=JSON.parse(localStorage.getItem(AUTOSAVE_VERSIONS_KEY)||'[]');}catch(e){list=[];}
+  const entry={title:draft.title,blocks:draft.blocks,savedAt:draft.savedAt};
+  if(list.length&&getDraftHash(list[0])===getDraftHash(entry))return;
+  list.unshift(entry);
+  if(list.length>AUTOSAVE_MAX_VERSIONS)list=list.slice(0,AUTOSAVE_MAX_VERSIONS);
+  localStorage.setItem(AUTOSAVE_VERSIONS_KEY,JSON.stringify(list));
+}
+
+function saveDraft(force=false){
+  const draft=getDraftData();
+  const hash=getDraftHash(draft);
+  if(!force && !autosaveDirty && hash===lastSavedHash) return;
+  try{
+    localStorage.setItem(AUTOSAVE_KEY,JSON.stringify(draft));
+    addVersion(draft);
+    lastSavedHash=hash;
+    autosaveDirty=false;
+    showSaveStatus('Autosaved');
+  }catch(e){console.warn('Autosave failed',e);}
+}
+
+function saveVersion(){
+  saveDraft(true);
+  showSaveStatus('Saved version');
+}
+
+function getSavedVersions(){
+  try{return JSON.parse(localStorage.getItem(AUTOSAVE_VERSIONS_KEY)||'[]');}catch(e){return [];}
+}
+
+function formatTime(ts){
+  const d=new Date(ts);
+  return d.toLocaleString([], {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit'});
+}
+
+function showVersions(event){
+  event.stopPropagation();
+  const menu=document.getElementById('verMenu');
+  const versions=getSavedVersions();
+  menu.innerHTML='';
+  if(!versions.length){
+    menu.innerHTML='<div class="veritem empty">No saved versions</div>';
+  } else {
+    versions.forEach((item,i)=>{
+      const el=document.createElement('div');
+      el.className='veritem';
+      el.textContent=(item.title||'Untitled')+' — '+formatTime(item.savedAt);
+      el.onclick=()=>restoreVersion(i);
+      menu.appendChild(el);
+    });
+  }
+  const rect=event.currentTarget.getBoundingClientRect();
+  menu.style.left=rect.right-220+'px';
+  menu.style.top=rect.bottom+8+'px';
+  menu.classList.add('show');
+}
+
+function hideVersionMenu(){
+  document.getElementById('verMenu').classList.remove('show');
+}
+
+function restoreVersion(index){
+  const versions=getSavedVersions();
+  const item=versions[index];
+  if(!item) return;
+  document.getElementById('ptitle').value=item.title||'';
+  loadBlocks(item.blocks);
+  lastSavedHash=getDraftHash(item);
+  autosaveDirty=true;
+  showSaveStatus('Restored version');
+  hideVersionMenu();
+}
+
+function loadDraft(){
+  const raw=localStorage.getItem(AUTOSAVE_KEY);
+  if(!raw) return false;
+  try{
+    const data=JSON.parse(raw);
+    if(data && Array.isArray(data.blocks)){
+      document.getElementById('ptitle').value=data.title||'';
+      loadBlocks(data.blocks);
+      lastSavedHash=getDraftHash(data);
+      showSaveStatus('Restored draft');
+      return true;
+    }
+  }catch(e){console.warn('loadDraft failed',e);}
+  return false;
+}
+
+function markDirty(){
+  autosaveDirty=true;
+  showSaveStatus('Unsaved changes');
+}
+
+function setupAutoSave(){
+  document.getElementById('ptitle').addEventListener('input',markDirty);
+  ED().addEventListener('input',markDirty);
+  window.addEventListener('beforeunload',()=>saveDraft(true));
+  setInterval(()=>saveDraft(),5000);
 }
 
 function setType(type){
@@ -597,14 +659,17 @@ function handleDD(p){
     if(!text){showDd('prefix',PREFIXES,p);return;}
     const pfx=PREFIXES.find(x=>up.startsWith(x));
     if(pfx){
-      const after=text.slice(pfx.length);
-      if(after.includes(' - ')){
-        const tq=after.split(' - ').pop().toUpperCase();
+      const after=text.slice(pfx.length).trim();
+      const dashIdx=after.indexOf('-');
+      if(dashIdx>=0){
+        const tq=after.slice(dashIdx+1).trim().toUpperCase();
+        console.log('time query:', tq, 'TIMES:', TIMES);
         const f=tq?TIMES.filter(x=>x.startsWith(tq)):TIMES;
+        console.log('filtered times:', f);
         if(f.length){showDd('time',f,p);return;}
         hideDd();return;
       }
-      const locQ=after.replace(/^\s*/,'');
+      const locQ=after;
       if(locQ.length>=1){const f=[...locations].filter(l=>l.startsWith(locQ.toUpperCase()));if(f.length){showDd('location',f,p);return;}}
       hideDd();return;
     }
@@ -667,7 +732,10 @@ function pickDd(){
   hideDd();caretEnd(p);syncAll();
 }
 
-document.addEventListener('mousedown',e=>{if(!document.getElementById('ddMenu').contains(e.target))hideDd();});
+document.addEventListener('mousedown',e=>{
+  if(!document.getElementById('ddMenu').contains(e.target))hideDd();
+  if(!document.getElementById('verMenu').contains(e.target) && !e.target.closest('#versionsBtn')) hideVersionMenu();
+});
 
 // ── DRAG & DROP (block reorder) ──────────────────────────────
 // Strategy: single floating handle element triggers drag.
@@ -937,29 +1005,32 @@ function caretEnd(el){
 }
 
 // ── INIT ──────────────────────────────────────────────────
-loadBlocks([
-  {type:'episode',  text:'Episode 1:'},
-  {type:'scene',    text:'INT. LECTURE HALL - AFTERNOON'},
-  {type:'action',   text:'The lecture hall is a large auditorium with expensive red fabric seats. Rosie sits next to Elliot in the center row, next to the aisle.'},
-  {type:'dialogue', text:'ELLIOT (snaps in a whisper): What are you doing? Pay attention!'},
-  {type:'action',   text:'Rosie blushes deeply and resumes note-taking. The professor stops teaching.'},
-  {type:'dialogue', text:'PROFESSOR (70): Rosie Jones, since you are so eager to disrupt the class, tell me how economic growth was traditionally defined.'},
-  {type:'dialogue', text:'ROSIE (stammering): Um... I don\'t know, Professor.'},
-  {type:'action',   text:'The class snickers. Rosie wraps her arms around herself.'},
-  {type:'scene',    text:'INT. BATHROOM - CONTINUOUS'},
-  {type:'action',   text:'Rosie stumbles out, completely dishevelled. She washes her hands and dries her tears.'},
-  {type:'dialogue', text:'ELLIOT (quietly): Show me what you learned.'},
-  {type:'dialogue', text:'ROSIE (tearfully): Elliot, seriously, not now. Leave me alone.'},
-  {type:'dialogue', text:'ROSIE: I mean it.'},
-  {type:'episode',  text:'Episode 2:'},
-  {type:'scene',    text:'INT. HALLWAY - AFTERNOON'},
-  {type:'action',   text:'Aiden Smith (35, tall, dark hair slicked back) is glancing at his watch when Rosie runs directly into him.'},
-  {type:'dialogue', text:'AIDEN (holding Rosie steady): Woah, careful there!'},
-  {type:'dialogue', text:'ROSIE (mumbling): Sorry.'},
-  {type:'action',   text:'Rosie scrambles to pick her things up. Aiden bends down to help.'},
-  {type:'dialogue', text:'AIDEN (landing on a portrait): Did you make these?'},
-  {type:'dialogue', text:'ROSIE (snatching it back): Thank you.'},
-]);
+if(!loadDraft()){
+  loadBlocks([
+    {type:'episode',  text:'Episode 1:'},
+    {type:'scene',    text:'INT. LECTURE HALL - AFTERNOON'},
+    {type:'action',   text:'The lecture hall is a large auditorium with expensive red fabric seats. Rosie sits next to Elliot in the center row, next to the aisle.'},
+    {type:'dialogue', text:'ELLIOT (snaps in a whisper): What are you doing? Pay attention!'},
+    {type:'action',   text:'Rosie blushes deeply and resumes note-taking. The professor stops teaching.'},
+    {type:'dialogue', text:'PROFESSOR (70): Rosie Jones, since you are so eager to disrupt the class, tell me how economic growth was traditionally defined.'},
+    {type:'dialogue', text:'ROSIE (stammering): Um... I don\'t know, Professor.'},
+    {type:'action',   text:'The class snickers. Rosie wraps her arms around herself.'},
+    {type:'scene',    text:'INT. BATHROOM - CONTINUOUS'},
+    {type:'action',   text:'Rosie stumbles out, completely dishevelled. She washes her hands and dries her tears.'},
+    {type:'dialogue', text:'ELLIOT (quietly): Show me what you learned.'},
+    {type:'dialogue', text:'ROSIE (tearfully): Elliot, seriously, not now. Leave me alone.'},
+    {type:'dialogue', text:'ROSIE: I mean it.'},
+    {type:'episode',  text:'Episode 2:'},
+    {type:'scene',    text:'INT. HALLWAY - AFTERNOON'},
+    {type:'action',   text:'Aiden Smith (35, tall, dark hair slicked back) is glancing at his watch when Rosie runs directly into him.'},
+    {type:'dialogue', text:'AIDEN (holding Rosie steady): Woah, careful there!'},
+    {type:'dialogue', text:'ROSIE (mumbling): Sorry.'},
+    {type:'action',   text:'Rosie scrambles to pick her things up. Aiden bends down to help.'},
+    {type:'dialogue', text:'AIDEN (landing on a portrait): Did you make these?'},
+    {type:'dialogue', text:'ROSIE (snatching it back): Thank you.'},
+  ]);
+}
+setupAutoSave();
 </script>
 </body>
 </html>
