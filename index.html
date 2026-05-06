@@ -78,7 +78,7 @@ body{font-family:'IBM Plex Sans KR',sans-serif;background:var(--bg);color:#ccc;h
 .fmtb{font-size:9px;font-weight:700;padding:4px 10px;border-radius:5px;text-transform:uppercase;letter-spacing:.5px;cursor:pointer;border:1px solid transparent;font-family:'IBM Plex Sans KR',sans-serif;transition:all .12s;background:transparent;display:flex;align-items:center;gap:5px;color:#fff}
 .fmtb .kh{font-size:8px;opacity:.6;font-weight:400}
 .fmtb:hover{background:rgba(255,255,255,.05)}
-.fmtb.on{border-color:currentColor}
+.fmtb.on{border-color:rgba(255,255,255,.5);background:rgba(255,255,255,.05)}
 
 /* PAPER */
 .page{width:660px;background:var(--paper);box-shadow:0 4px 40px rgba(0,0,0,.5);padding:56px 80px 80px;border-radius:2px;position:relative;padding-top:72px}
@@ -132,7 +132,7 @@ body{font-family:'IBM Plex Sans KR',sans-serif;background:var(--bg);color:#ccc;h
 .spclose:hover{background:#2a2a2c;color:#eee}
 
 /* Drag handle overlay */
-#dragHandle{position:fixed;opacity:0;z-index:200;cursor:grab;color:#888;font-size:10px;user-select:none;padding:4px 2px;transition:opacity .1s;pointer-events:auto;background:rgba(30,30,32,0.7);border-radius:4px;line-height:1}
+#dragHandle{position:fixed;opacity:0;z-index:200;cursor:grab;color:#ccc;font-size:14px;user-select:none;padding:6px 4px;transition:opacity .1s;pointer-events:auto;background:rgba(30,30,32,0.7);border-radius:4px;line-height:1}
 #dragHandle::before{content:'⋮'}
 #dragHandle:active{cursor:grabbing}
 
