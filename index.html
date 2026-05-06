@@ -629,7 +629,14 @@ const DD_LABELS={prefix:'Scene Type',location:'Locations',time:'Time of Day',cha
 function showDd(type,items,p){
   dd={show:true,type,items,sel:0,targetP:p};
   const menu=document.getElementById('ddMenu');
-  const rect=p.getBoundingClientRect();
+  const sel=window.getSelection();
+  let rect;
+  if(sel.rangeCount){
+    const range=sel.getRangeAt(0);
+    rect=range.getBoundingClientRect();
+  }else{
+    rect=p.getBoundingClientRect();
+  }
   menu.innerHTML=`<div class="ddsec">${DD_LABELS[type]||type}</div>`;
   items.forEach((item,i)=>{
     const d=document.createElement('div');
