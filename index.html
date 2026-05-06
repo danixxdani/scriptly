@@ -727,7 +727,7 @@ function pickDd(){
   if(t==='scene'){
     if(dd.type==='prefix')p.textContent=val+' ';
     else if(dd.type==='location'){const pfx=PREFIXES.find(x=>p.textContent.toUpperCase().startsWith(x))||'INT.';p.textContent=pfx+' '+val+' - ';}
-    else if(dd.type==='time'){const di=p.textContent.lastIndexOf(' - ');p.textContent=p.textContent.slice(0,di+3)+val;}
+    else if(dd.type==='time'){const di=p.textContent.lastIndexOf('-');if(di>=0){p.textContent=p.textContent.slice(0,di+1)+' '+val;}else{p.textContent+=' '+val;}}
   }else if(t==='dialogue'){p.textContent=val+': ';}
   hideDd();caretEnd(p);syncAll();
 }
